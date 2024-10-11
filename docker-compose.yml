@@ -1,0 +1,70 @@
+version: '3'
+
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        image: laravel-app
+        container_name: app
+        restart: unless-stopped
+        tty: true
+        depends_on:
+            db:
+                condition: service_healthy
+        environment:
+            SERVICE_NAME: app
+            SERVICE_TAGS: prod
+        working_dir: /var/www
+        volumes:
+            - appdata:/var/www
+            - ./docker/php/prod.ini:/usr/local/etc/php/conf.d/prod.ini
+        networks:
+            - app-network
+        entrypoint: ["sh", "docker/entrypoint.sh"]
+
+    webserver:
+        image: nginx:alpine
+        container_name: webserver
+        restart: unless-stopped
+        tty: true
+        ports:
+            - "80:80"
+        volumes:
+            - appdata:/var/www
+            - ./docker/nginx/:/etc/nginx/conf.d/
+        networks:
+            - app-network
+
+    db:
+        image: mysql:8
+        container_name: db
+        restart: unless-stopped
+        tty: true
+        ports:
+            - "3306:3306"
+        environment:
+            MYSQL_DATABASE: ${DB_DATABASE}
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+            MYSQL_USER: ${DB_USERNAME}
+            MYSQL_PASSWORD: ${DB_PASSWORD}
+        volumes:
+            - dbdata:/var/lib/mysql/
+        networks:
+            - app-network
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+            interval: 3s
+            timeout: 3s
+            retries: 10
+
+
+networks:
+    app-network:
+        driver: bridge
+
+volumes:
+    dbdata:
+        driver: local
+    appdata:
+        driver: local
